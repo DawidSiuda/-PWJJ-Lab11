@@ -10,18 +10,16 @@ public class Sorter implements SorterMBean {
 
 	static private final int SEED_MIN = 0;
 	static private final int SEED_MAX = 50000;
-	//static private final int LIST_SIZE = 600;
-	//static private final int NUMBER_OF_THREAD = 4;
 
 	private int threadsNumber;
 	private int memorySize;
 
 	Map<Thread, SortThread> sortThreadTab;
-	ReferenceCounter referenceCounter;
 	Boolean endComputing;
 	Map<Integer , Reference<int[]>> map;
 	Semaphore mutex;
 	Random rand;
+	ReferenceCounter referenceCounter;
 
 
 	public Sorter() {
@@ -34,7 +32,6 @@ public class Sorter implements SorterMBean {
 		sortThreadTab = new HashMap<Thread, SortThread>();
 
 		mutex = new Semaphore(1);
-
 		referenceCounter = new ReferenceCounter();
 
 		//
@@ -45,7 +42,7 @@ public class Sorter implements SorterMBean {
 
 		for(int i = 0; i < threadsNumber; i++)
 		{
-			SortThread st = new SortThread(rand.nextInt(), map, mutex, SEED_MIN, SEED_MAX, memorySize, referenceCounter);
+			SortThread st = new SortThread(rand.nextInt(), map, mutex, SEED_MIN, SEED_MAX, memorySize, referenceCounter, memorySize);
 			Thread t = new Thread(st);
 			sortThreadTab.put(t, st);
 		}
@@ -55,50 +52,6 @@ public class Sorter implements SorterMBean {
 		for (Thread t : sortThreadTab.keySet())
 			t.start();
 	}
-
-
-//	private void reloadComputing() {
-//
-//		//
-//		// Kill threads.
-//		//
-//
-//		for (SortThread t : sortThreadTab.values())
-//			t.setEndThread(true);
-//
-//		//
-//		// Check if all threads stop working.
-//		//
-//
-//		Boolean allThreadsAreDead = false;
-//		while(allThreadsAreDead == false) {
-//			try {
-//				Thread.sleep(500);
-//			} catch (InterruptedException e) {}
-//			for (Thread t : sortThreadTab.keySet())
-//				if(t.isAlive() == true)
-//					continue;
-//			break;
-//		}
-//
-//		//
-//		// Clean map of threads
-//		//
-//
-//		sortThreadTab.clear();
-//
-//		//
-//		// Create new map of threads and start them.
-//		//
-//
-//		for(int i = 0; i < threadsNumber; i++)
-//		{
-//			SortThread st = new SortThread(rand.nextInt(), map, mutex, SEED_MIN, SEED_MAX, memorySize, referenceCounter);
-//			Thread t = new Thread(st);
-//			t.start();
-//			sortThreadTab.put(t, st);
-//		}
-//	}
 
 	public Boolean sortingHasBeenFinished() {
 
@@ -148,7 +101,7 @@ public class Sorter implements SorterMBean {
 
 		for(int i = 0; i < threadsNumber; i++)
 		{
-			SortThread st = new SortThread(rand.nextInt(), map, mutex, SEED_MIN, SEED_MAX, memorySize, referenceCounter);
+			SortThread st = new SortThread(rand.nextInt(), map, mutex, SEED_MIN, SEED_MAX, memorySize, referenceCounter, memorySize);
 			Thread t = new Thread(st);
 			t.start();
 			sortThreadTab.put(t, st);
@@ -164,57 +117,32 @@ public class Sorter implements SorterMBean {
 	@Override
 	public void setMemorySize(int memorySize) {
 		this.memorySize = memorySize;
-		//
-		// Kill threads.
-		//
 
-		for (SortThread t : sortThreadTab.values())
-			t.setEndThread(true);
+		try {
+			mutex.acquire();
 
-		//
-		// Check if all threads stop working.
-		//
-
-		Boolean allThreadsAreDead = false;
-		while(allThreadsAreDead == false) {
-			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {}
-			for (Thread t : sortThreadTab.keySet())
-				if(t.isAlive() == true)
-					continue;
-			break;
-		}
-
-		//
-		// Clean map of threads
-		//
-
-		sortThreadTab.clear();
-
-		//
-		// Create new map of values.
-		//
-
-		//
-		// Create new map of threads and start them.
-		//
-
-		for(int i = 0; i < threadsNumber; i++)
-		{
-			SortThread st = new SortThread(rand.nextInt(), map, mutex, SEED_MIN, SEED_MAX, memorySize, referenceCounter);
-			Thread t = new Thread(st);
-			t.start();
-			sortThreadTab.put(t, st);
+			for (SortThread t : sortThreadTab.values())
+				t.setMemSize(memorySize);
+			mutex.release();
+		} catch (InterruptedException e) {
+			System.out.println("Muitex error");
 		}
 	}
 
 	@Override
 	public String getInfo() {
+
+		int size = -1;
+		try {
+			mutex.acquire();
+			size = map.size();
+			mutex.release();
+		} catch (InterruptedException e) {
+			System.out.print("ERROR: SortThreadError.");
+		}
 		String info = referenceCounter.getStat();
 		referenceCounter.cleanSecondsCountern();
-
-		info += "Threads " + threadsNumber + ", memory size: " + memorySize + "\n";
+		info += "Threads " + threadsNumber + ", map size: " + memorySize + ", current size: " + size + "\n";
 		return info;
 	}
 }

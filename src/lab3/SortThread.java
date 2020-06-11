@@ -2,6 +2,7 @@ package lab3;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Semaphore;
@@ -21,14 +22,15 @@ public class SortThread implements Runnable{
 	private int mapSize;
 	private int memSize;
 	private Random rand;
-	ReferenceCounter referenceCounter;
 	Boolean endThread;
+	ReferenceCounter referenceCounter;
 
 	java.lang.reflect.Method methodSolve;
 	Class<?> reflectIntSorter;
 
 	public SortThread(long seed, Map<Integer , Reference<int[]>> map, Semaphore mapMutex,
-					      int seedMin, int seedMax, int numberOfElementsToSort, ReferenceCounter referenceCounter, int memSize)
+					      int seedMin, int seedMax, int numberOfElementsToSort, ReferenceCounter referenceCounter,
+					      int memSize)
 	{
 		endThread = false;
 
@@ -100,9 +102,36 @@ public class SortThread implements Runnable{
 				{
 					mapMutex.acquire();
 
-					seed = rand.nextInt(mapSize) + seedMin;
-
 					referenceCounter.incrementMemoryCall();
+
+					if(memSize == 0) {
+						map.clear();
+						mapMutex.release();
+						Thread.sleep(100);
+						continue;
+					}
+
+					if(memSize == 1) {
+						map.clear();
+					}
+
+					if(map.size() >= memSize) {
+						// Remove 1/3 of elements.
+						Iterator<Integer> it = map.keySet().iterator();
+
+						try {
+							while(map.size() > (memSize/4)*3) {
+								if(it.hasNext() == true) {
+									it.next();
+									it.remove();
+								}
+							}
+						} catch (Exception e) {
+							//System.out.println("WARNING: Iterator null.");
+						}
+					}
+
+					seed = rand.nextInt(mapSize) + seedMin;
 
 					if(map.containsKey(seed) == true )
 					{
@@ -115,7 +144,6 @@ public class SortThread implements Runnable{
 						}
 
 						referenceCounter.incrementUnsuccessfulMemoryCall();
-
 					}
 
 
@@ -123,35 +151,26 @@ public class SortThread implements Runnable{
 					// Fill data for rand seed
 					//
 					Random randTable = new Random(seed);
-
 					array = new int[numberOfElementsToSort];
-
 					for (int i = 0; i< numberOfElementsToSort; i++)
 					{
 						array[i] = randTable.nextInt(10000);
 					}
 
-				   // map.put(seed, array.clone());
 				    map.put(seed, new WeakReference<int[]>(array.clone()));
-
 				    mapMutex.release();
 
-				    //System.out.println(threadName + "INFO > Createt array for seed: "+ seed);
 				    break;
 				}
 
-				//System.out.println(threadName + "INFO > Start sort array for seed: "+ seed);
-
 				Object obj = methodSolve.invoke(reflectIntSorter.newInstance(), array);
 				array = (int[])obj;
-				//System.out.println(threadName + "INFO > Array for seed: "+ seed + " has been sorted");
 
 				mapMutex.acquire();
 				map.put(seed, new WeakReference<int[]>(array));
 
 				mapMutex.release();
 
-				//System.out.println(threadName + "INFO > Array for seed: "+ seed + " has been added to map");
 
 				Thread.sleep(1);
 
@@ -172,5 +191,26 @@ public class SortThread implements Runnable{
 
 	public void setEndThread(Boolean value) {
 		endThread = value;
+	}
+
+	public void setMemSize(int memSize) {
+		this.memSize = memSize;
+	}
+
+	public int getMemSize() {
+		return memSize;
+	}
+
+	public int getCurrentMemSize() {
+		int size = -1;
+		try {
+			mapMutex.acquire();
+			size = map.size();
+			mapMutex.release();
+		} catch (InterruptedException e) {
+			System.out.print("ERROR: SortThreadError.");
+		}
+
+		return size;
 	}
 }
